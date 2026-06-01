@@ -1,0 +1,1211 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🎮 游戏大厅</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Microsoft YaHei', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+        
+        /* 大厅样式 */
+        #lobby-screen {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 40px 20px;
+            min-height: 100vh;
+        }
+        .lobby-title {
+            font-size: 48px;
+            color: white;
+            margin-bottom: 10px;
+            text-shadow: 0 4px 10px rgba(0,0,0,0.3);
+        }
+        .lobby-subtitle {
+            color: rgba(255,255,255,0.9);
+            font-size: 18px;
+            margin-bottom: 40px;
+        }
+        .games-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 25px;
+            width: 100%;
+            max-width: 900px;
+        }
+        .game-card {
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+        .game-card:hover {
+            transform: translateY(-10px) scale(1.02);
+            box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+        }
+        .game-emoji {
+            font-size: 60px;
+            margin-bottom: 15px;
+            display: block;
+        }
+        .game-name {
+            font-size: 24px;
+            color: #333;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        .game-desc {
+            color: #666;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+        .game-tag {
+            display: inline-block;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 12px;
+            margin-top: 15px;
+        }
+
+        /* 游戏屏幕通用 */
+        .game-screen {
+            display: none;
+            width: 100vw;
+            height: 100vh;
+            position: relative;
+            overflow: hidden;
+        }
+        .back-btn {
+            position: absolute;
+            top: 15px;
+            left: 15px;
+            z-index: 1000;
+            background: rgba(0,0,0,0.6);
+            color: white;
+            border: 2px solid rgba(255,255,255,0.3);
+            padding: 10px 20px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 16px;
+            font-family: 'Microsoft YaHei', sans-serif;
+            transition: all 0.3s;
+        }
+        .back-btn:hover {
+            background: rgba(0,0,0,0.8);
+            transform: scale(1.05);
+        }
+
+        /* 飞机大战样式 */
+        #airplane-canvas { background: linear-gradient(to bottom, #1a75bc, #87CEEB); display: block; }
+        
+        /* 小兔子样式 */
+        #rabbit-canvas { background: linear-gradient(to bottom, #87CEEB, #E0F7FA); display: block; }
+        
+        /* 点气球样式 */
+        #balloon-canvas { 
+            background: linear-gradient(to bottom, #87CEEB 0%, #B0E0E6 50%, #E0F6FF 100%); 
+            display: block; 
+            cursor: crosshair;
+        }
+        
+        /* 单词游戏样式（复用之前的） */
+        #word-game-container {
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow-y: auto;
+        }
+        .word-inner {
+            width: 100%;
+            max-width: 800px;
+            height: 100%;
+            max-height: 900px;
+            background: #fff;
+            border-radius: 0;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            position: relative;
+        }
+        @media(min-width: 600px) {
+            .word-inner { border-radius: 20px; height: 90vh; }
+        }
+        
+        /* 游戏UI面板 */
+        .game-ui {
+            position: absolute;
+            top: 60px;
+            left: 10px;
+            pointer-events: none;
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            z-index: 100;
+        }
+        .ui-panel {
+            background: rgba(0,0,0,0.6);
+            padding: 8px 15px;
+            border-radius: 10px;
+            color: white;
+            font-size: 14px;
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+        .ui-panel span { font-weight: bold; margin-left: 5px; }
+        .ui-panel .red { color: #ff4444; }
+        .ui-panel .gold { color: #ffd700; }
+        .ui-panel .green { color: #00ff88; }
+    </style>
+</head>
+<body>
+
+<!-- ================= 游戏大厅 ================= -->
+<div id="lobby-screen">
+    <div class="lobby-title">🎮 游戏大厅</div>
+    <div class="lobby-subtitle">选择一个游戏，开始挑战吧！</div>
+    
+    <div class="games-grid">
+        <div class="game-card" onclick="GameManager.showGame('airplane')">
+            <span class="game-emoji">✈️</span>
+            <div class="game-name">飞机大战</div>
+            <div class="game-desc">驾驶战机，射击敌机，躲避攻击！<<br>90秒后出现Boss，击中50次通关</div>
+            <span class="game-tag">射击闯关</span>
+        </div>
+        
+        <div class="game-card" onclick="GameManager.showGame('rabbit')">
+            <span class="game-emoji">🐰</span>
+            <div class="game-name">小兔子采花</div>
+            <div class="game-desc">帮小兔子在森林里采花！<<br>避开石头、蘑菇和大灰狼</div>
+            <span class="game-tag">冒险躲避</span>
+        </div>
+        
+        <div class="game-card" onclick="GameManager.showGame('balloon')">
+            <span class="game-emoji">🎈</span>
+            <div class="game-name">点气球</div>
+            <div class="game-desc">点击彩色气球得分！<<br>金色气球冰冻时间，小心炸弹气球</div>
+            <span class="game-tag">反应挑战</span>
+        </div>
+        
+        <div class="game-card" onclick="GameManager.showGame('word')">
+            <span class="game-emoji">📚</span>
+            <div class="game-name">单词大作战</div>
+            <div class="game-desc">看中文写英文，轻松背单词！<<br>小学/初中/高中/日常四级词库</div>
+            <span class="game-tag">学习益智</span>
+        </div>
+    </div>
+</div>
+
+<!-- ================= 飞机大战 ================= -->
+<div class="game-screen" id="airplane-screen">
+    <button class="back-btn" onclick="GameManager.showLobby()">← 返回大厅</button>
+    <canvas id="airplane-canvas"></canvas>
+    <div class="game-ui" id="airplane-ui">
+        <div class="ui-panel">🎯 得分：<span class="gold" id="ap-score">0</span></div>
+        <div class="ui-panel">❤️ 生命：<span class="red" id="ap-life">10</span></div>
+        <div class="ui-panel">⏰ 时间：<span class="green" id="ap-time">0:00</span></div>
+        <div class="ui-panel" id="ap-boss-panel" style="display:none">👹 Boss：<span class="red" id="ap-boss">50</span></div>
+    </div>
+</div>
+
+<!-- ================= 小兔子采花 ================= -->
+<div class="game-screen" id="rabbit-screen">
+    <button class="back-btn" onclick="GameManager.showLobby()">← 返回大厅</button>
+    <canvas id="rabbit-canvas"></canvas>
+    <div class="game-ui" id="rabbit-ui">
+        <div class="ui-panel">🌸 花朵：<span class="gold" id="rb-score">0</span></div>
+        <div class="ui-panel">❤️ 生命：<span class="red" id="rb-life">5</span></div>
+        <div class="ui-panel">⏰ 时间：<span class="green" id="rb-time">2:00</span></div>
+    </div>
+</div>
+
+<!-- ================= 点气球 ================= -->
+<div class="game-screen" id="balloon-screen">
+    <button class="back-btn" onclick="GameManager.showLobby()">← 返回大厅</button>
+    <canvas id="balloon-canvas"></canvas>
+    <div class="game-ui" id="balloon-ui">
+        <div class="ui-panel">🎯 得分：<span class="gold" id="bl-score">0</span></div>
+        <div class="ui-panel">⏰ 时间：<span class="green" id="bl-time">2:00</span></div>
+        <div class="ui-panel">❄️ 冰冻：<span id="bl-freeze">0</span></div>
+    </div>
+    <div id="bl-warning" style="display:none; position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); font-size:80px; color:#ff0000; text-shadow:0 0 20px rgba(255,0,0,0.5); pointer-events:none; z-index:200; animation:pulse 0.5s infinite alternate;">30</div>
+    <div id="bl-freeze-banner" style="display:none; position:absolute; top:30%; left:50%; transform:translate(-50%,-50%); font-size:60px; font-weight:bold; color:#00BFFF; text-shadow:0 0 20px rgba(0,191,255,0.8); pointer-events:none; z-index:200;">❄️ 冰冻时间 ❄️</div>
+</div>
+
+<!-- ================= 单词大作战 ================= -->
+<div class="game-screen" id="word-screen">
+    <button class="back-btn" onclick="GameManager.showLobby()">← 返回大厅</button>
+    <div id="word-game-container">
+        <!-- 这里动态加载单词游戏内容 -->
+        <div class="word-inner" id="word-inner">
+            <!-- 由JS生成 -->
+        </div>
+    </div>
+</div>
+
+<script>
+/* ================= 游戏管理器 ================= */
+const GameManager = {
+    currentGame: null,
+    
+    showLobby() {
+        if (this.currentGame && this.currentGame.stop) this.currentGame.stop();
+        this.currentGame = null;
+        document.querySelectorAll('.game-screen').forEach(s => s.style.display = 'none');
+        document.getElementById('lobby-screen').style.display = 'flex';
+    },
+    
+    showGame(name) {
+        document.getElementById('lobby-screen').style.display = 'none';
+        document.querySelectorAll('.game-screen').forEach(s => s.style.display = 'none');
+        document.getElementById(name + '-screen').style.display = 'block';
+        
+        if (name === 'airplane') this.currentGame = AirplaneGame;
+        else if (name === 'rabbit') this.currentGame = RabbitGame;
+        else if (name === 'balloon') this.currentGame = BalloonGame;
+        else if (name === 'word') this.currentGame = WordGame;
+        
+        if (this.currentGame) {
+            setTimeout(() => this.currentGame.init(), 50);
+        }
+    }
+};
+
+/* ================= 工具函数 ================= */
+function resizeCanvas(cvs) {
+    cvs.width = window.innerWidth;
+    cvs.height = window.innerHeight;
+}
+function checkRectCollision(a, b) {
+    return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+}
+function formatTime(sec) {
+    const m = Math.floor(sec / 60), s = Math.floor(sec % 60);
+    return m + ':' + (s < 10 ? '0' : '') + s;
+}
+
+/* ================= 飞机大战 ================= */
+const AirplaneGame = (() => {
+    let cvs, ctx, state = 'start', player, bullets = [], enemies = [], particles = [];
+    let enemyBullets = [], score = 0, life = 10, startTime = 0, boss = null, bossAppeared = false;
+    let keys = {}, loopId, timerInt;
+    const GAME_TIME = 120, BOSS_TIME = 90, BOSS_HP = 50;
+    
+    function init() {
+        cvs = document.getElementById('airplane-canvas');
+        ctx = cvs.getContext('2d');
+        resizeCanvas(cvs);
+        window.addEventListener('resize', () => resizeCanvas(cvs));
+        state = 'start';
+        showStart();
+    }
+    
+    function showStart() {
+        state = 'ready';
+        drawBg();
+        ctx.fillStyle = 'rgba(0,0,0,0.7)';
+        ctx.fillRect(0, 0, cvs.width, cvs.height);
+        ctx.fillStyle = '#FFD700';
+        ctx.font = 'bold 48px Microsoft YaHei';
+        ctx.textAlign = 'center';
+        ctx.fillText('✈️ 飞机大战', cvs.width/2, cvs.height/2 - 60);
+        ctx.fillStyle = 'white';
+        ctx.font = '20px Microsoft YaHei';
+        ctx.fillText('方向键移动，自动射击', cvs.width/2, cvs.height/2);
+        ctx.fillText('点击屏幕或按空格开始', cvs.width/2, cvs.height/2 + 40);
+        
+        const startHandler = (e) => {
+            if (e.type === 'keydown' && e.code !== 'Space') return;
+            window.removeEventListener('click', startHandler);
+            window.removeEventListener('keydown', startHandler);
+            start();
+        };
+        setTimeout(() => {
+            window.addEventListener('click', startHandler);
+            window.addEventListener('keydown', startHandler);
+        }, 100);
+    }
+    
+    function start() {
+        state = 'playing';
+        score = 0; life = 10; bullets = []; enemies = []; enemyBullets = []; particles = [];
+        boss = null; bossAppeared = false;
+        player = { x: cvs.width/2, y: cvs.height - 100, w: 40, h: 50, inv: 0 };
+        startTime = Date.now();
+        
+        keys = {};
+        window.addEventListener('keydown', e => keys[e.key] = true);
+        window.addEventListener('keyup', e => keys[e.key] = false);
+        
+        if (timerInt) clearInterval(timerInt);
+        timerInt = setInterval(() => {
+            if (state !== 'playing') return;
+            const t = Math.floor((Date.now() - startTime) / 1000);
+            document.getElementById('ap-time').textContent = formatTime(t);
+            if (t >= BOSS_TIME && !bossAppeared) spawnBoss();
+        }, 1000);
+        
+        loop();
+    }
+    
+    function spawnBoss() {
+        bossAppeared = true;
+        boss = { x: cvs.width/2, y: 100, w: 100, h: 80, hp: BOSS_HP, maxHp: BOSS_HP, phase: 'enter', dir: 1 };
+        document.getElementById('ap-boss-panel').style.display = 'block';
+    }
+    
+    function drawBg() {
+        const g = ctx.createLinearGradient(0, 0, 0, cvs.height);
+        g.addColorStop(0, '#1a75bc'); g.addColorStop(1, '#87CEEB');
+        ctx.fillStyle = g; ctx.fillRect(0, 0, cvs.width, cvs.height);
+        // 云朵
+        ctx.fillStyle = 'rgba(255,255,255,0.6)';
+        for (let i = 0; i < 5; i++) {
+            const x = (Date.now() / 50 + i * 200) % (cvs.width + 100) - 50;
+            const y = 50 + i * 60;
+            ctx.beginPath(); ctx.arc(x, y, 30, 0, Math.PI*2);
+            ctx.arc(x+25, y-10, 35, 0, Math.PI*2);
+            ctx.arc(x+50, y, 30, 0, Math.PI*2);
+            ctx.fill();
+        }
+    }
+    
+    function loop() {
+        if (state !== 'playing') return;
+        ctx.clearRect(0, 0, cvs.width, cvs.height);
+        drawBg();
+        
+        // 玩家
+        if (keys['ArrowLeft'] || keys['a']) player.x -= 5;
+        if (keys['ArrowRight'] || keys['d']) player.x += 5;
+        if (keys['ArrowUp'] || keys['w']) player.y -= 5;
+        if (keys['ArrowDown'] || keys['s']) player.y += 5;
+        player.x = Math.max(20, Math.min(cvs.width - 20, player.x));
+        player.y = Math.max(20, Math.min(cvs.height - 20, player.y));
+        if (player.inv > 0) player.inv--;
+        
+        // 绘制玩家
+        ctx.save();
+        ctx.translate(player.x, player.y);
+        ctx.fillStyle = '#4a9fd8';
+        ctx.beginPath(); ctx.moveTo(0, -25); ctx.lineTo(-15, 15); ctx.lineTo(-8, 25); ctx.lineTo(8, 25); ctx.lineTo(15, 15); ctx.closePath(); ctx.fill();
+        ctx.fillStyle = '#FF6600';
+        ctx.beginPath(); ctx.moveTo(-5, 25); ctx.lineTo(0, 35 + Math.random()*5); ctx.lineTo(5, 25); ctx.fill();
+        ctx.restore();
+        
+        // 子弹
+        if (Math.random() < 0.15) bullets.push({ x: player.x, y: player.y - 30, w: 4, h: 12, vy: -8 });
+        bullets.forEach((b, i) => {
+            b.y += b.vy;
+            ctx.fillStyle = '#00FF88'; ctx.shadowColor = '#00FF88'; ctx.shadowBlur = 10;
+            ctx.fillRect(b.x - 2, b.y, 4, 12); ctx.shadowBlur = 0;
+            if (b.y < -20) bullets.splice(i, 1);
+        });
+        
+        // 敌机
+        if (!bossAppeared && Math.random() < 0.02) {
+            enemies.push({ x: Math.random() * (cvs.width - 40) + 20, y: -30, w: 30, h: 30, hp: 1, vy: 2 + Math.random() });
+        }
+        enemies.forEach((e, i) => {
+            e.y += e.vy;
+            ctx.fillStyle = '#CC3333';
+            ctx.beginPath(); ctx.moveTo(e.x, e.y + 15); ctx.lineTo(e.x - 15, e.y - 15); ctx.lineTo(e.x + 15, e.y - 15); ctx.closePath(); ctx.fill();
+            // 碰撞玩家
+            if (player.inv <= 0 && Math.abs(player.x - e.x) < 30 && Math.abs(player.y - e.y) < 30) {
+                life--; player.inv = 60; enemies.splice(i, 1);
+                if (life <= 0) gameOver();
+            }
+            // 被子弹击中
+            bullets.forEach((b, bi) => {
+                if (Math.abs(b.x - e.x) < 20 && Math.abs(b.y - e.y) < 20) {
+                    score++; enemies.splice(i, 1); bullets.splice(bi, 1);
+                }
+            });
+            if (e.y > cvs.height + 50) enemies.splice(i, 1);
+        });
+        
+        // Boss
+        if (boss) {
+            if (boss.phase === 'enter') { boss.y += 2; if (boss.y >= 120) boss.phase = 'fight'; }
+            else {
+                boss.x += boss.dir * 3;
+                if (boss.x < 60 || boss.x > cvs.width - 60) boss.dir *= -1;
+                if (Math.random() < 0.05) enemyBullets.push({ x: boss.x, y: boss.y + 40, w: 8, h: 8, vy: 5 });
+            }
+            ctx.fillStyle = '#8B0000';
+            ctx.fillRect(boss.x - 50, boss.y - 40, 100, 80);
+            ctx.fillStyle = '#FF0000';
+            ctx.beginPath(); ctx.arc(boss.x, boss.y, 15, 0, Math.PI*2); ctx.fill();
+            // Boss血条
+            ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(boss.x - 50, boss.y - 55, 100, 8);
+            ctx.fillStyle = '#FF0000'; ctx.fillRect(boss.x - 50, boss.y - 55, 100 * (boss.hp / BOSS_HP), 8);
+            
+            bullets.forEach((b, bi) => {
+                if (Math.abs(b.x - boss.x) < 50 && Math.abs(b.y - boss.y) < 40) {
+                    boss.hp--; bullets.splice(bi, 1);
+                    if (boss.hp <= 0) { victory(); return; }
+                }
+            });
+            document.getElementById('ap-boss').textContent = boss.hp;
+            
+            // Boss子弹碰撞玩家
+            enemyBullets.forEach((eb, i) => {
+                eb.y += eb.vy;
+                ctx.fillStyle = '#FF0000'; ctx.beginPath(); ctx.arc(eb.x, eb.y, 5, 0, Math.PI*2); ctx.fill();
+                if (Math.abs(eb.x - player.x) < 20 && Math.abs(eb.y - player.y) < 25) {
+                    life = 0; gameOver();
+                }
+                if (eb.y > cvs.height) enemyBullets.splice(i, 1);
+            });
+        }
+        
+        document.getElementById('ap-score').textContent = score;
+        document.getElementById('ap-life').textContent = life;
+        
+        loopId = requestAnimationFrame(loop);
+    }
+    
+    function gameOver() {
+        state = 'over'; cancelAnimationFrame(loopId);
+        ctx.fillStyle = 'rgba(0,0,0,0.8)'; ctx.fillRect(0, 0, cvs.width, cvs.height);
+        ctx.fillStyle = '#FF4444'; ctx.font = 'bold 40px Microsoft YaHei'; ctx.textAlign = 'center';
+        ctx.fillText('💥 任务失败', cvs.width/2, cvs.height/2 - 40);
+        ctx.fillStyle = 'white'; ctx.font = '24px Microsoft YaHei';
+        ctx.fillText('得分: ' + score, cvs.width/2, cvs.height/2 + 20);
+        setTimeout(showStart, 2000);
+    }
+    
+    function victory() {
+        state = 'victory'; cancelAnimationFrame(loopId);
+        ctx.fillStyle = 'rgba(0,0,0,0.8)'; ctx.fillRect(0, 0, cvs.width, cvs.height);
+        ctx.fillStyle = '#FFD700'; ctx.font = 'bold 40px Microsoft YaHei'; ctx.textAlign = 'center';
+        ctx.fillText('🏆 任务完成！', cvs.width/2, cvs.height/2 - 40);
+        ctx.fillStyle = 'white'; ctx.font = '24px Microsoft YaHei';
+        ctx.fillText('得分: ' + score, cvs.width/2, cvs.height/2 + 20);
+        setTimeout(showStart, 3000);
+    }
+    
+    function stop() {
+        state = 'stop'; cancelAnimationFrame(loopId); clearInterval(timerInt);
+        window.removeEventListener('keydown', ()=>{});
+        window.removeEventListener('keyup', ()=>{});
+    }
+    
+    return { init, stop };
+})();
+
+/* ================= 小兔子采花 ================= */
+const RabbitGame = (() => {
+    let cvs, ctx, state = 'start', player, items = [], score = 0, life = 5;
+    let startTime, loopId, timerInt;
+    const GAME_TIME = 120;
+    
+    function init() {
+        cvs = document.getElementById('rabbit-canvas');
+        ctx = cvs.getContext('2d');
+        resizeCanvas(cvs);
+        window.addEventListener('resize', () => resizeCanvas(cvs));
+        showStart();
+    }
+    
+    function showStart() {
+        state = 'ready';
+        drawBg();
+        ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(0,0,cvs.width,cvs.height);
+        ctx.fillStyle = '#FF69B4'; ctx.font = 'bold 44px Microsoft YaHei'; ctx.textAlign = 'center';
+        ctx.fillText('🐰 小兔子采花', cvs.width/2, cvs.height/2 - 60);
+        ctx.fillStyle = 'white'; ctx.font = '18px Microsoft YaHei';
+        ctx.fillText('方向键移动，采花+1分', cvs.width/2, cvs.height/2);
+        ctx.fillText('石头-1生命，蘑菇-2生命，狼=游戏结束', cvs.width/2, cvs.height/2 + 30);
+        ctx.fillText('点击或按空格开始', cvs.width/2, cvs.height/2 + 70);
+        
+        const handler = (e) => {
+            if (e.type === 'keydown' && e.code !== 'Space') return;
+            window.removeEventListener('click', handler);
+            window.removeEventListener('keydown', handler);
+            start();
+        };
+        setTimeout(() => {
+            window.addEventListener('click', handler);
+            window.addEventListener('keydown', handler);
+        }, 100);
+    }
+    
+    function start() {
+        state = 'playing'; score = 0; life = 5; items = [];
+        player = { x: cvs.width/2, y: cvs.height/2, size: 40, inv: 0 };
+        startTime = Date.now();
+        
+        let keys = {};
+        window.addEventListener('keydown', e => keys[e.key] = true);
+        window.addEventListener('keyup', e => keys[e.key] = false);
+        
+        if (timerInt) clearInterval(timerInt);
+        timerInt = setInterval(() => {
+            if (state !== 'playing') return;
+            const t = Math.max(0, GAME_TIME - Math.floor((Date.now() - startTime) / 1000));
+            document.getElementById('rb-time').textContent = formatTime(t);
+            if (t <= 0) victory();
+        }, 1000);
+        
+        function gameLoop() {
+            if (state !== 'playing') return;
+            
+            // 移动
+            if (keys['ArrowLeft'] || keys['a']) player.x -= 5;
+            if (keys['ArrowRight'] || keys['d']) player.x += 5;
+            if (keys['ArrowUp'] || keys['w']) player.y -= 5;
+            if (keys['ArrowDown'] || keys['s']) player.y += 5;
+            player.x = Math.max(30, Math.min(cvs.width - 30, player.x));
+            player.y = Math.max(30, Math.min(cvs.height - 80, player.y));
+            if (player.inv > 0) player.inv--;
+            
+            drawBg();
+            
+            // 生成物品
+            if (Math.random() < 0.03) {
+                const r = Math.random();
+                let type = 'flower';
+                if (r < 0.15) type = 'wolf';
+                else if (r < 0.35) type = 'mushroom';
+                else if (r < 0.55) type = 'stone';
+                items.push({ x: Math.random() * (cvs.width - 60) + 30, y: -30, type, speed: 2 + Math.random(), size: 35 });
+            }
+            
+            // 绘制和碰撞
+            items.forEach((item, i) => {
+                item.y += item.speed;
+                let emoji = '🌸';
+                if (item.type === 'stone') emoji = '🪨';
+                else if (item.type === 'mushroom') emoji = '🍄';
+                else if (item.type === 'wolf') emoji = '🐺';
+                
+                ctx.font = item.size + 'px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText(emoji, item.x, item.y);
+                
+                // 碰撞
+                const dx = player.x - item.x, dy = player.y - item.y;
+                if (player.inv <= 0 && Math.sqrt(dx*dx + dy*dy) < 40) {
+                    if (item.type === 'flower') score++;
+                    else if (item.type === 'stone') { life--; player.inv = 45; }
+                    else if (item.type === 'mushroom') { life -= 2; player.inv = 45; }
+                    else if (item.type === 'wolf') { gameOver(); return; }
+                    
+                    if (life <= 0) { gameOver(); return; }
+                    items.splice(i, 1);
+                }
+                if (item.y > cvs.height + 50) items.splice(i, 1);
+            });
+            
+            // 绘制兔子
+            ctx.save(); ctx.translate(player.x, player.y);
+            if (player.inv > 0 && Math.floor(player.inv / 4) % 2 === 0) ctx.globalAlpha = 0.5;
+            ctx.fillStyle = '#FFFFFF';
+            ctx.beginPath(); ctx.ellipse(0, 5, 20, 16, 0, 0, Math.PI*2); ctx.fill(); // 身体
+            ctx.beginPath(); ctx.arc(0, -10, 14, 0, Math.PI*2); ctx.fill(); // 头
+            ctx.fillStyle = '#FFB6C1'; // 耳朵
+            ctx.beginPath(); ctx.ellipse(-8, -28, 5, 16, -0.2, 0, Math.PI*2); ctx.fill();
+            ctx.beginPath(); ctx.ellipse(8, -28, 5, 16, 0.2, 0, Math.PI*2); ctx.fill();
+            ctx.fillStyle = '#333'; // 眼
+            ctx.beginPath(); ctx.arc(-5, -12, 2.5, 0, Math.PI*2); ctx.fill();
+            ctx.beginPath(); ctx.arc(5, -12, 2.5, 0, Math.PI*2); ctx.fill();
+            ctx.restore();
+            
+            document.getElementById('rb-score').textContent = score;
+            document.getElementById('rb-life').textContent = life;
+            
+            loopId = requestAnimationFrame(gameLoop);
+        }
+        loopId = requestAnimationFrame(gameLoop);
+    }
+    
+    function drawBg() {
+        const g = ctx.createLinearGradient(0, 0, 0, cvs.height);
+        g.addColorStop(0, '#87CEEB'); g.addColorStop(1, '#E0F7FA');
+        ctx.fillStyle = g; ctx.fillRect(0, 0, cvs.width, cvs.height);
+        ctx.fillStyle = '#4a8c4a'; ctx.fillRect(0, cvs.height - 60, cvs.width, 60);
+        // 树
+        ctx.fillStyle = '#2d6da3';
+        for (let i = 0; i < 6; i++) {
+            const x = (i * 180 + Date.now() / 50) % (cvs.width + 100) - 50;
+            ctx.beginPath(); ctx.moveTo(x, cvs.height - 60); ctx.lineTo(x - 20, cvs.height - 140); ctx.lineTo(x + 20, cvs.height - 140); ctx.fill();
+        }
+    }
+    
+    function gameOver() {
+        state = 'over'; cancelAnimationFrame(loopId);
+        ctx.fillStyle = 'rgba(0,0,0,0.8)'; ctx.fillRect(0,0,cvs.width,cvs.height);
+        ctx.fillStyle = '#FF4444'; ctx.font = 'bold 40px Microsoft YaHei'; ctx.textAlign = 'center';
+        ctx.fillText('💔 冒险结束', cvs.width/2, cvs.height/2 - 30);
+        ctx.fillStyle = 'white'; ctx.font = '22px Microsoft YaHei';
+        ctx.fillText('采花: ' + score, cvs.width/2, cvs.height/2 + 30);
+        setTimeout(showStart, 2500);
+    }
+    
+    function victory() {
+        state = 'victory'; cancelAnimationFrame(loopId);
+        ctx.fillStyle = 'rgba(0,0,0,0.8)'; ctx.fillRect(0,0,cvs.width,cvs.height);
+        ctx.fillStyle = '#FFD700'; ctx.font = 'bold 40px Microsoft YaHei'; ctx.textAlign = 'center';
+        ctx.fillText('🎉 安全回家！', cvs.width/2, cvs.height/2 - 30);
+        ctx.fillStyle = 'white'; ctx.font = '22px Microsoft YaHei';
+        ctx.fillText('采花: ' + score, cvs.width/2, cvs.height/2 + 30);
+        setTimeout(showStart, 3000);
+    }
+    
+    function stop() { state = 'stop'; cancelAnimationFrame(loopId); clearInterval(timerInt); }
+    return { init, stop };
+})();
+
+/* ================= 点气球 ================= */
+const BalloonGame = (() => {
+    let cvs, ctx, state = 'start', balloons = [], particles = [], score = 0;
+    let freezeCount = 0, isFrozen = false, freezeEnd = 0, startTime, loopId, timerInt;
+    const GAME_TIME = 120, FREEZE_DURATION = 5;
+    
+    function init() {
+        cvs = document.getElementById('balloon-canvas');
+        ctx = cvs.getContext('2d');
+        resizeCanvas(cvs);
+        window.addEventListener('resize', () => resizeCanvas(cvs));
+        showStart();
+    }
+    
+    function showStart() {
+        state = 'ready';
+        drawBg();
+        ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(0,0,cvs.width,cvs.height);
+        ctx.fillStyle = '#FF69B4'; ctx.font = 'bold 44px Microsoft YaHei'; ctx.textAlign = 'center';
+        ctx.fillText('🎈 点气球', cvs.width/2, cvs.height/2 - 60);
+        ctx.fillStyle = 'white'; ctx.font = '18px Microsoft YaHei';
+        ctx.fillText('点击气球得分！金色气球=冰冻时间', cvs.width/2, cvs.height/2);
+        ctx.fillText('小心炸弹气球！扣10分！', cvs.width/2, cvs.height/2 + 30);
+        ctx.fillText('点击屏幕开始', cvs.width/2, cvs.height/2 + 70);
+        
+        const handler = () => {
+            window.removeEventListener('click', handler);
+            start();
+        };
+        setTimeout(() => window.addEventListener('click', handler), 100);
+    }
+    
+    function start() {
+        state = 'playing'; score = 0; freezeCount = 0; balloons = []; particles = []; isFrozen = false;
+        startTime = Date.now();
+        
+        if (timerInt) clearInterval(timerInt);
+        timerInt = setInterval(() => {
+            if (state !== 'playing') return;
+            const t = Math.max(0, GAME_TIME - Math.floor((Date.now() - startTime) / 1000));
+            document.getElementById('bl-time').textContent = formatTime(t);
+            document.getElementById('bl-freeze').textContent = freezeCount;
+            if (t <= 30) {
+                document.getElementById('bl-warning').style.display = 'block';
+                document.getElementById('bl-warning').textContent = t;
+            } else {
+                document.getElementById('bl-warning').style.display = 'none';
+            }
+            if (t <= 0) gameOver();
+        }, 1000);
+        
+        // 点击事件
+        cvs.onclick = (e) => {
+            if (state !== 'playing') return;
+            const rect = cvs.getBoundingClientRect();
+            const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+            
+            for (let i = balloons.length - 1; i >= 0; i--) {
+                const b = balloons[i];
+                const dx = mx - b.x, dy = my - b.y;
+                if (Math.sqrt(dx*dx + dy*dy) < b.r + 15) {
+                    if (b.type === 'bomb') {
+                        score = Math.max(0, score - 10);
+                        // 爆炸效果
+                        for (let k = 0; k < 10; k++) particles.push({ x: b.x, y: b.y, vx: (Math.random()-0.5)*10, vy: (Math.random()-0.5)*10, life: 1, color: '#FF0000' });
+                    } else if (b.type === 'golden') {
+                        score += 5; freezeCount++;
+                        isFrozen = true; freezeEnd = Date.now() + FREEZE_DURATION * 1000;
+                        document.getElementById('bl-freeze-banner').style.display = 'block';
+                        setTimeout(() => document.getElementById('bl-freeze-banner').style.display = 'none', 2000);
+                    } else {
+                        score++;
+                    }
+                    balloons.splice(i, 1);
+                    break;
+                }
+            }
+        };
+        
+        function loop() {
+            if (state !== 'playing') return;
+            drawBg();
+            
+            // 冰冻检查
+            if (isFrozen && Date.now() > freezeEnd) isFrozen = false;
+            
+            // 生成气球
+            if (!isFrozen && Math.random() < 0.03) {
+                const r = Math.random();
+                let type = 'normal';
+                if (r < 0.08) type = 'bomb';
+                else if (r < 0.18) type = 'golden';
+                const colors = ['#FF6B6B','#4ECDC4','#45B7D1','#F9CA24','#6C5CE7','#FD79A8'];
+                balloons.push({
+                    x: Math.random() * (cvs.width - 60) + 30,
+                    y: cvs.height + 40,
+                    r: 25 + Math.random() * 15,
+                    speed: 1.5 + Math.random() * 2,
+                    color: colors[Math.floor(Math.random() * colors.length)],
+                    type,
+                    wobble: Math.random() * Math.PI * 2
+                });
+            }
+            
+            // 更新气球
+            balloons.forEach((b, i) => {
+                if (!isFrozen) {
+                    b.y -= b.speed;
+                    b.wobble += 0.05;
+                    b.x += Math.sin(b.wobble) * 0.5;
+                }
+                
+                ctx.save();
+                if (b.type === 'golden') {
+                    ctx.shadowColor = '#FFD700'; ctx.shadowBlur = 20;
+                    ctx.fillStyle = '#FFD700';
+                } else if (b.type === 'bomb') {
+                    ctx.fillStyle = '#333';
+                } else {
+                    ctx.fillStyle = b.color;
+                }
+                
+                ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, Math.PI*2); ctx.fill();
+                // 高光
+                ctx.fillStyle = 'rgba(255,255,255,0.3)';
+                ctx.beginPath(); ctx.ellipse(b.x - b.r*0.3, b.y - b.r*0.3, b.r*0.2, b.r*0.15, -0.5, 0, Math.PI*2); ctx.fill();
+                
+                if (b.type === 'bomb') {
+                    ctx.fillStyle = '#FF0000'; ctx.font = 'bold 20px Arial'; ctx.textAlign = 'center';
+                    ctx.fillText('💣', b.x, b.y + 5);
+                } else if (b.type === 'golden') {
+                    ctx.fillStyle = '#FFF'; ctx.font = '20px Arial';
+                    ctx.fillText('✨', b.x + b.r*0.5, b.y - b.r*0.5);
+                }
+                
+                // 绳子
+                ctx.strokeStyle = '#888'; ctx.lineWidth = 2;
+                ctx.beginPath(); ctx.moveTo(b.x, b.y + b.r);
+                if (isFrozen) ctx.lineTo(b.x, b.y + b.r + 30);
+                else ctx.quadraticCurveTo(b.x + Math.sin(b.wobble*2)*10, b.y + b.r + 20, b.x, b.y + b.r + 40);
+                ctx.stroke();
+                ctx.restore();
+                
+                if (b.y < -60) balloons.splice(i, 1);
+            });
+            
+            // 粒子
+            particles.forEach((p, i) => {
+                p.x += p.vx; p.y += p.vy; p.vy += 0.2; p.life -= 0.03;
+                ctx.globalAlpha = Math.max(0, p.life);
+                ctx.fillStyle = p.color;
+                ctx.beginPath(); ctx.arc(p.x, p.y, 4, 0, Math.PI*2); ctx.fill();
+                ctx.globalAlpha = 1;
+                if (p.life <= 0) particles.splice(i, 1);
+            });
+            
+            document.getElementById('bl-score').textContent = score;
+            loopId = requestAnimationFrame(loop);
+        }
+        loopId = requestAnimationFrame(loop);
+    }
+    
+    function drawBg() {
+        const g = ctx.createLinearGradient(0, 0, 0, cvs.height);
+        g.addColorStop(0, '#87CEEB'); g.addColorStop(0.5, '#B0E0E6'); g.addColorStop(1, '#E0F6FF');
+        ctx.fillStyle = g; ctx.fillRect(0, 0, cvs.width, cvs.height);
+        // 云
+        ctx.fillStyle = 'rgba(255,255,255,0.5)';
+        for (let i = 0; i < 4; i++) {
+            const x = (Date.now() / 80 + i * 250) % (cvs.width + 100) - 50;
+            ctx.beginPath(); ctx.arc(x, 80 + i * 40, 30, 0, Math.PI*2);
+            ctx.arc(x + 25, 70 + i * 40, 35, 0, Math.PI*2);
+            ctx.arc(x + 50, 80 + i * 40, 30, 0, Math.PI*2); ctx.fill();
+        }
+    }
+    
+    function gameOver() {
+        state = 'over'; cancelAnimationFrame(loopId);
+        cvs.onclick = null;
+        ctx.fillStyle = 'rgba(0,0,0,0.8)'; ctx.fillRect(0,0,cvs.width,cvs.height);
+        ctx.fillStyle = '#FFD700'; ctx.font = 'bold 40px Microsoft YaHei'; ctx.textAlign = 'center';
+        ctx.fillText('时间到！', cvs.width/2, cvs.height/2 - 30);
+        ctx.fillStyle = 'white'; ctx.font = '24px Microsoft YaHei';
+        ctx.fillText('得分: ' + score, cvs.width/2, cvs.height/2 + 30);
+        setTimeout(showStart, 3000);
+    }
+    
+    function stop() { state = 'stop'; cancelAnimationFrame(loopId); clearInterval(timerInt); cvs.onclick = null; }
+    return { init, stop };
+})();
+
+/* ================= 单词大作战 ================= */
+const WordGame = (() => {
+    // 词库
+    const DB = {
+        primary: [
+            {en:'apple',cn:'苹果'},{en:'book',cn:'书'},{en:'cat',cn:'猫'},{en:'dog',cn:'狗'},
+            {en:'happy',cn:'快乐的'},{en:'water',cn:'水'},{en:'sun',cn:'太阳'},{en:'moon',cn:'月亮'},
+            {en:'school',cn:'学校'},{en:'friend',cn:'朋友'},{en:'family',cn:'家庭'},{en:'food',cn:'食物'},
+            {en:'red',cn:'红色'},{en:'blue',cn:'蓝色'},{en:'big',cn:'大的'},{en:'small',cn:'小的'},
+            {en:'run',cn:'跑'},{en:'jump',cn:'跳'},{en:'eat',cn:'吃'},{en:'drink',cn:'喝'}
+        ],
+        middle: [
+            {en:'beautiful',cn:'美丽的'},{en:'important',cn:'重要的'},{en:'remember',cn:'记得'},
+            {en:'different',cn:'不同的'},{en:'children',cn:'孩子们'},{en:'tomorrow',cn:'明天'},
+            {en:'yesterday',cn:'昨天'},{en:'favorite',cn:'最喜欢的'},{en:'weather',cn:'天气'},
+            {en:'season',cn:'季节'},{en:'animal',cn:'动物'},{en:'vegetable',cn:'蔬菜'},
+            {en:'mountain',cn:'山'},{en:'library',cn:'图书馆'},{en:'exercise',cn:'锻炼'},
+            {en:'language',cn:'语言'},{en:'culture',cn:'文化'},{en:'journey',cn:'旅行'},
+            {en:'knowledge',cn:'知识'},{en:'practice',cn:'练习'}
+        ],
+        high: [
+            {en:'phenomenon',cn:'现象'},{en:'significant',cn:'重要的'},{en:'consequence',cn:'结果'},
+            {en:'environment',cn:'环境'},{en:'government',cn:'政府'},{en:'technology',cn:'科技'},
+            {en:'generation',cn:'一代人'},{en:'opportunity',cn:'机会'},{en:'experience',cn:'经验'},
+            {en:'perspective',cn:'观点'},{en:'contribution',cn:'贡献'},{en:'achievement',cn:'成就'},
+            {en:'responsibility',cn:'责任'},{en:'consciousness',cn:'意识'},{en:'circumstance',cn:'环境'},
+            {en:'extraordinary',cn:'非凡的'},{en:'contemporary',cn:'当代的'},{en:'nevertheless',cn:'然而'},
+            {en:'approximately',cn:'大约'},{en:'simultaneously',cn:'同时地'}
+        ],
+        daily: [
+            {en:'hello',cn:'你好'},{en:'thank you',cn:'谢谢'},{en:'goodbye',cn:'再见'},
+            {en:'restaurant',cn:'餐厅'},{en:'hospital',cn:'医院'},{en:'supermarket',cn:'超市'},
+            {en:'bathroom',cn:'浴室'},{en:'breakfast',cn:'早餐'},{en:'elevator',cn:'电梯'},
+            {en:'subway',cn:'地铁'},{en:'airport',cn:'机场'},{en:'passport',cn:'护照'},
+            {en:'luggage',cn:'行李'},{en:'appointment',cn:'预约'},{en:'discount',cn:'折扣'},
+            {en:'receipt',cn:'收据'},{en:'direction',cn:'方向'},{en:'emergency',cn:'紧急情况'},
+            {en:'reservation',cn:'预订'},{en:'vegetarian',cn:'素食者'}
+        ]
+    };
+    
+    let container, currentLevel = 'primary', wordCount = 10, gameWords = [];
+    let currentIdx = 0, score = 0, combo = 0, correct = 0, wrong = 0, hints = 3;
+    let wrongWords = [], startTime = 0, timerInt = null, currentInput = '', currentWord = null;
+    let state = 'start';
+    
+    function init() {
+        container = document.getElementById('word-inner');
+        renderStart();
+    }
+    
+    function renderStart() {
+        state = 'start';
+        container.innerHTML = `
+            <div style="flex:1; display:flex; flex-direction:column; justify-content:center; align-items:center; padding:40px; background:linear-gradient(180deg,#f8f9fa,#e9ecef); overflow-y:auto;">
+                <div style="font-size:70px; margin-bottom:10px; animation:bounce 2s infinite;">📚</div>
+                <h1 style="font-size:36px; color:#495057; margin-bottom:10px;">单词大作战</h1>
+                <p style="color:#868e96; font-size:16px; margin-bottom:30px;">看中文，写英文，轻松背单词！</p>
+                
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; width:100%; max-width:400px; margin-bottom:25px;">
+                    <div class="wlevel-btn" data-level="primary" onclick="WordGame.selectLevel(this)" style="padding:15px; border:2px solid #dee2e6; border-radius:12px; background:white; cursor:pointer; text-align:center; ${currentLevel==='primary'?'border-color:#667eea; background:linear-gradient(135deg,#667eea,#764ba2); color:white;':''}">
+                        <div style="font-size:28px;">🌱</div>
+                        <div style="font-weight:bold; font-size:16px;">小学词汇</div>
+                    </div>
+                    <div class="wlevel-btn" data-level="middle" onclick="WordGame.selectLevel(this)" style="padding:15px; border:2px solid #dee2e6; border-radius:12px; background:white; cursor:pointer; text-align:center;">
+                        <div style="font-size:28px;">📖</div>
+                        <div style="font-weight:bold; font-size:16px;">初中词汇</div>
+                    </div>
+                    <div class="wlevel-btn" data-level="high" onclick="WordGame.selectLevel(this)" style="padding:15px; border:2px solid #dee2e6; border-radius:12px; background:white; cursor:pointer; text-align:center;">
+                        <div style="font-size:28px;">🎓</div>
+                        <div style="font-weight:bold; font-size:16px;">高中词汇</div>
+                    </div>
+                    <div class="wlevel-btn" data-level="daily" onclick="WordGame.selectLevel(this)" style="padding:15px; border:2px solid #dee2e6; border-radius:12px; background:white; cursor:pointer; text-align:center;">
+                        <div style="font-size:28px;">✈️</div>
+                        <div style="font-weight:bold; font-size:16px;">日常用语</div>
+                    </div>
+                </div>
+                
+                <div style="width:100%; max-width:400px; margin-bottom:25px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; padding:12px 15px; background:white; border-radius:10px;">
+                        <span style="font-weight:600; color:#495057;">单词数量</span>
+                        <div style="display:flex; align-items:center; gap:10px;">
+                            <button onclick="WordGame.changeCount(-5)" style="width:32px;height:32px;border-radius:50%;border:2px solid #dee2e6;background:white;cursor:pointer;font-size:16px;">−</button>
+                            <span style="font-weight:bold; color:#667eea; font-size:18px;" id="wcount">${wordCount}</span>
+                            <button onclick="WordGame.changeCount(5)" style="width:32px;height:32px;border-radius:50%;border:2px solid #dee2e6;background:white;cursor:pointer;font-size:16px;">+</button>
+                        </div>
+                    </div>
+                </div>
+                
+                <button onclick="WordGame.start()" style="padding:16px 50px; font-size:20px; border:none; border-radius:50px; background:linear-gradient(135deg,#667eea,#764ba2); color:white; font-weight:bold; cursor:pointer; font-family:Microsoft YaHei;">开始挑战</button>
+            </div>
+        `;
+    }
+    
+    function selectLevel(btn) {
+        document.querySelectorAll('.wlevel-btn').forEach(b => {
+            b.style.borderColor = '#dee2e6';
+            b.style.background = 'white';
+            b.style.color = 'black';
+        });
+        btn.style.borderColor = '#667eea';
+        btn.style.background = 'linear-gradient(135deg,#667eea,#764ba2)';
+        btn.style.color = 'white';
+        currentLevel = btn.dataset.level;
+    }
+    
+    function changeCount(d) {
+        wordCount = Math.max(5, Math.min(25, wordCount + d));
+        document.getElementById('wcount').textContent = wordCount;
+    }
+    
+    function start() {
+        const pool = [...DB[currentLevel]];
+        gameWords = [];
+        for (let i = 0; i < wordCount && pool.length > 0; i++) {
+            const idx = Math.floor(Math.random() * pool.length);
+            gameWords.push(pool.splice(idx, 1)[0]);
+        }
+        currentIdx = 0; score = 0; combo = 0; correct = 0; wrong = 0; hints = 3; wrongWords = []; currentInput = '';
+        startTime = Date.now();
+        state = 'playing';
+        if (timerInt) clearInterval(timerInt);
+        timerInt = setInterval(() => {
+            const e = Math.floor((Date.now() - startTime) / 1000);
+            const el = document.getElementById('wtimer');
+            if (el) el.textContent = Math.floor(e/60) + ':' + (e%60<<10?'0':'') + (e%60);
+        }, 1000);
+        loadWord();
+    }
+    
+    function loadWord() {
+        if (currentIdx >= gameWords.length) { endGame(); return; }
+        currentWord = gameWords[currentIdx];
+        currentInput = '';
+        renderGameUI();
+    }
+    
+    function renderGameUI() {
+        const len = currentWord.en.length;
+        let slots = '';
+        for (let i = 0; i < len; i++) {
+            let cls = 'letter-slot', content = '';
+            if (i < currentInput.length) {
+                content = currentInput[i];
+                cls += ' filled';
+                if (currentInput[i].toLowerCase() === currentWord.en[i].toLowerCase()) cls += ' correct';
+                else cls += ' wrong';
+            }
+            slots += `<div class="${cls}" id="wslot-${i}" style="width:46px;height:56px;border:3px solid #dee2e6;border-radius:12px;display:flex;justify-content:center;align-items:center;font-size:26px;font-weight:bold;text-transform:uppercase;transition:all 0.3s; background:${cls.includes('correct')?'#d3f9d8':(cls.includes('wrong')?'#ffe3e3':'#f8f9fa')}; border-color:${cls.includes('correct')?'#40c057':(cls.includes('wrong')?'#ff6b6b':'#dee2e6')}; color:${cls.includes('correct')?'#2b8a3e':(cls.includes('wrong')?'#c92a2a':'#495057')};">${content}</div>`;
+        }
+        
+        let keys = '';
+        const rows = ['QWERTYUIOP','ASDFGHJKL','ZXCVBNM'];
+        rows.forEach(row => {
+            row.split('').forEach(c => {
+                keys += `<button onclick="WordGame.input('${c}')" style="padding:10px 4px; border:2px solid #dee2e6; border-radius:8px; background:white; cursor:pointer; font-size:16px; font-weight:bold; color:#495057;">${c}</button>`;
+            });
+        });
+        keys += `<button onclick="WordGame.backspace()" style="grid-column:span 2; padding:10px; border:2px solid #fcc419; border-radius:8px; background:#fff3bf; cursor:pointer; font-size:16px;">⌫</button>`;
+        keys += `<button onclick="WordGame.submit()" style="grid-column:span 2; padding:10px; border:2px solid #40c057; border-radius:8px; background:#d3f9d8; cursor:pointer; font-size:16px;">↵</button>`;
+        
+        container.innerHTML = `
+            <div style="background:linear-gradient(135deg,#667eea,#764ba2); color:white; padding:15px; display:flex; justify-content:space-between; align-items:center;">
+                <div style="text-align:center;"><div style="font-size:24px; font-weight:bold;" id="wscore">0</div><div style="font-size:11px; opacity:0.9;">得分</div></div>
+                <div style="text-align:center;"><div style="font-size:24px; font-weight:bold;" id="wcombo">0</div><div style="font-size:11px; opacity:0.9;">连击</div></div>
+                <div style="text-align:center;"><div style="font-size:24px; font-weight:bold;" id="wprog">1</div><div style="font-size:11px; opacity:0.9;">进度</div></div>
+                <div style="text-align:center;"><div style="font-size:24px; font-weight:bold;" id="wtimer">0:00</div><div style="font-size:11px; opacity:0.9;">用时</div></div>
+            </div>
+            <div style="flex:1; display:flex; flex-direction:column; justify-content:center; align-items:center; padding:25px; position:relative;">
+                <div style="position:absolute; top:80px; right:20px; background:linear-gradient(135deg,#ffd43b,#fcc419); color:#343a40; padding:8px 16px; border-radius:20px; font-weight:bold; font-size:16px; opacity:0; transition:all 0.3s; transform:scale(0);" id="wcomboDisp">🔥 3连击!</div>
+                
+                <div style="background:white; border-radius:16px; padding:30px; width:100%; max-width:480px; box-shadow:0 8px 25px rgba(0,0,0,0.1); text-align:center;" id="wcard">
+                    <div style="color:#868e96; font-size:13px; margin-bottom:12px; letter-spacing:1px;">根据中文写英文</div>
+                    <div style="font-size:28px; color:#343a40; font-weight:bold; margin-bottom:8px;">${currentWord.cn}</div>
+                    <div style="color:#868e96; font-size:14px; margin-bottom:20px; min-height:20px;" id="whint">按键盘输入字母</div>
+                    
+                    <div style="display:flex; justify-content:center; gap:6px; margin-bottom:25px; flex-wrap:wrap;">${slots}</div>
+                    
+                    <div style="display:grid; grid-template-columns:repeat(10,1fr); gap:5px; max-width:460px; margin:0 auto 20px;">${keys}</div>
+                    
+                    <div style="display:flex; gap:12px; justify-content:center;">
+                        <button onclick="WordGame.useHint()" style="padding:10px 20px; border-radius:20px; border:2px solid #fcc419; background:white; cursor:pointer; font-size:14px; font-weight:600; color:#495057;">💡 提示 (${hints})</button>
+                        <button onclick="WordGame.skip()" style="padding:10px 20px; border-radius:20px; border:2px solid #ff6b6b; background:white; cursor:pointer; font-size:14px; font-weight:600; color:#495057;">⏭ 跳过</button>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        // 绑定键盘
+        document.onkeydown = (e) => {
+            if (state !== 'playing') return;
+            if (e.key === 'Backspace') { e.preventDefault(); backspace(); }
+            else if (e.key === 'Enter') { e.preventDefault(); submit(); }
+            else if (e.key.length === 1 && /[a-zA-Z]/.test(e.key)) { e.preventDefault(); input(e.key); }
+        };
+    }
+    
+    function input(c) {
+        if (!currentWord || currentInput.length >= currentWord.en.length) return;
+        currentInput += c;
+        updateSlots();
+        if (currentInput.length === currentWord.en.length) setTimeout(submit, 200);
+    }
+    
+    function backspace() {
+        currentInput = currentInput.slice(0, -1);
+        updateSlots();
+    }
+    
+    function updateSlots() {
+        const len = currentWord.en.length;
+        for (let i = 0; i < len; i++) {
+            const slot = document.getElementById(`wslot-${i}`);
+            if (!slot) continue;
+            if (i < currentInput.length) {
+                slot.textContent = currentInput[i];
+                slot.style.background = currentInput[i].toLowerCase() === currentWord.en[i].toLowerCase() ? '#d3f9d8' : '#ffe3e3';
+                slot.style.borderColor = currentInput[i].toLowerCase() === currentWord.en[i].toLowerCase() ? '#40c057' : '#ff6b6b';
+                slot.style.color = currentInput[i].toLowerCase() === currentWord.en[i].toLowerCase() ? '#2b8a3e' : '#c92a2a';
+            } else {
+                slot.textContent = '';
+                slot.style.background = '#f8f9fa';
+                slot.style.borderColor = '#dee2e6';
+                slot.style.color = '#495057';
+            }
+        }
+    }
+    
+    function submit() {
+        if (!currentWord || currentInput.length === 0) return;
+        const isCorrect = currentInput.toLowerCase() === currentWord.en.toLowerCase();
+        
+        if (isCorrect) {
+            combo++; correct++;
+            let pts = combo >= 5 ? 20 : (combo >= 3 ? 15 : 10);
+            score += pts;
+            
+            const card = document.getElementById('wcard');
+            if (card) { card.style.animation = 'none'; card.offsetHeight; card.style.animation = 'correctPop 0.5s'; }
+            
+            if (combo >= 3) {
+                const cd = document.getElementById('wcomboDisp');
+                if (cd) { cd.textContent = `🔥 ${combo}连击!`; cd.style.opacity = '1'; cd.style.transform = 'scale(1)'; }
+                setTimeout(() => { const c = document.getElementById('wcomboDisp'); if(c){c.style.opacity='0';c.style.transform='scale(0)';} }, 2000);
+            }
+        } else {
+            combo = 0; wrong++;
+            wrongWords.push({...currentWord, yourAnswer: currentInput});
+            const card = document.getElementById('wcard');
+            if (card) { card.style.animation = 'none'; card.offsetHeight; card.style.animation = 'shake 0.5s'; }
+            
+            const hint = document.getElementById('whint');
+            if (hint) hint.innerHTML = `正确答案是: <strong style="color:#40c057;">${currentWord.en}</strong>`;
+            setTimeout(() => { currentIdx++; loadWord(); }, 1500);
+            updateStats();
+            return;
+        }
+        
+        updateStats();
+        setTimeout(() => { currentIdx++; loadWord(); }, 800);
+    }
+    
+    function useHint() {
+        if (hints <= 0 || !currentWord) return;
+        hints--;
+        const btn = document.querySelector('button[onclick="WordGame.useHint()"]');
+        if (btn) btn.textContent = `💡 提示 (${hints})`;
+        
+        for (let i = 0; i < currentWord.en.length; i++) {
+            if (i >= currentInput.length || currentInput[i].toLowerCase() !== currentWord.en[i].toLowerCase()) {
+                currentInput = currentWord.en.substring(0, i + 1);
+                updateSlots();
+                const hint = document.getElementById('whint');
+                if (hint) hint.textContent = `提示: 第${i+1}个字母是 "${currentWord.en[i].toUpperCase()}"`;
+                return;
+            }
+        }
+    }
+    
+    function skip() {
+        if (!currentWord) return;
+        combo = 0; wrong++;
+        wrongWords.push({...currentWord, yourAnswer: '(跳过)'});
+        const hint = document.getElementById('whint');
+        if (hint) hint.innerHTML = `跳过! 答案是: <strong style="color:#fcc419;">${currentWord.en}</strong>`;
+        setTimeout(() => { currentIdx++; loadWord(); }, 1200);
+    }
+    
+    function updateStats() {
+        const s = document.getElementById('wscore'), c = document.getElementById('wcombo'), p = document.getElementById('wprog');
+        if (s) s.textContent = score; if (c) c.textContent = combo; if (p) p.textContent = currentIdx + 1;
+    }
+    
+    function endGame() {
+        clearInterval(timerInt); state = 'end'; document.onkeydown = null;
+        const total = correct + wrong;
+        const acc = total > 0 ? Math.round((correct / total) * 100) : 0;
+        const e = Math.floor((Date.now() - startTime) / 1000);
+        
+        let emoji = acc >= 90 ? '🏆' : (acc >= 70 ? '🌟' : (acc >= 50 ? '👍' : '💪'));
+        let title = acc >= 90 ? '单词大师!' : (acc >= 70 ? '表现优秀!' : (acc >= 50 ? '继续加油!' : '再接再厉!'));
+        
+        let wrongHtml = '';
+        if (wrongWords.length > 0) {
+            wrongHtml = `<h3 style="color:#495057; margin-bottom:12px;">📋 错题回顾</h3><div style="background:white; border-radius:12px; padding:15px;">`;
+            wrongWords.forEach(w => {
+                wrongHtml += `<div style="display:flex; justify-content:space-between; padding:10px 0; border-bottom:1px solid #e9ecef;"><div><div style="font-weight:bold; color:#495057;">${w.en}</div><div style="color:#868e96; font-size:13px;">${w.cn}</div></div><div style="color:#ff6b6b; font-size:13px;">你的答案: ${w.yourAnswer}</div></div>`;
+            });
+            wrongHtml += `</div>`;
+        }
+        
+        container.innerHTML = `
+            <div style="flex:1; display:flex; flex-direction:column; justify-content:center; align-items:center; padding:30px; background:linear-gradient(180deg,#f8f9fa,#e9ecef); overflow-y:auto;">
+                <div style="font-size:60px; margin-bottom:10px;">${emoji}</div>
+                <div style="font-size:32px; color:#495057; font-weight:bold; margin-bottom:8px;">${title}</div>
+                <div style="font-size:20px; color:#667eea; font-weight:bold; margin-bottom:25px;">得分: ${score}</div>
+                
+                <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; width:100%; max-width:450px; margin-bottom:25px;">
+                    <div style="background:white; padding:15px; border-radius:12px; text-align:center;"><div style="font-size:24px; font-weight:bold; color:#667eea;">${correct}</div><div style="font-size:12px; color:#868e96; margin-top:4px;">正确</div></div>
+                    <div style="background:white; padding:15px; border-radius:12px; text-align:center;"><div style="font-size:24px; font-weight:bold; color:#667eea;">${wrong}</div><div style="font-size:12px; color:#868e96; margin-top:4px;">错误</div></div>
+                    <div style="background:white; padding:15px; border-radius:12px; text-align:center;"><div style="font-size:24px; font-weight:bold; color:#667eea;">${acc}%</div><div style="font-size:12px; color:#868e96; margin-top:4px;">正确率</div></div>
+                </div>
+                
+                <div style="width:100%; max-width:450px; margin-bottom:25px;">${wrongHtml}</div>
+                
+                <div style="display:flex; gap:12px;">
+                    <button onclick="WordGame.renderStart()" style="padding:14px 35px; border-radius:25px; border:2px solid #dee2e6; background:white; color:#495057; font-size:16px; font-weight:bold; cursor:pointer; font-family:Microsoft YaHei;">返回菜单</button>
+                    <button onclick="WordGame.start()" style="padding:14px 35px; border-radius:25px; border:none; background:linear-gradient(135deg,#667eea,#764ba2); color:white; font-size:16px; font-weight:bold; cursor:pointer; font-family:Microsoft YaHei;">再玩一次</button>
+                </div>
+            </div>
+        `;
+    }
+    
+    function stop() {
+        clearInterval(timerInt); state = 'stop'; document.onkeydown = null;
+    }
+    
+    return { init, stop, selectLevel, changeCount, start, input, backspace, submit, useHint, skip };
+})();
+
+/* 全局暴露给HTML内联事件 */
+window.WordGame = WordGame;
+</script>
+<style>
+@keyframes bounce { 0%,100%{transform:translateY(0);} 50%{transform:translateY(-20px);} }
+@keyframes shake { 0%,100%{transform:translateX(0);} 20%{transform:translateX(-10px);} 40%{transform:translateX(10px);} 60%{transform:translateX(-10px);} 80%{transform:translateX(10px);} }
+@keyframes correctPop { 0%{transform:scale(1);} 50%{transform:scale(1.05);} 100%{transform:scale(1);} }
+</style>
+</body>
+</html>
